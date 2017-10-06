@@ -24,7 +24,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg", "0.4.0", ResourceId = 1420)]
+    [Info("Vanish", "Wulf/lukespragg", "0.4.1", ResourceId = 1420)]
     [Description("Allows players with permission to become truly invisible")]
     public class Vanish : RustPlugin
     {
@@ -151,6 +151,7 @@ namespace Oxide.Plugins
 
         [OnlinePlayers]
         private Hash<BasePlayer, OnlinePlayer> onlinePlayers = new Hash<BasePlayer, OnlinePlayer>();
+        private void OnPlayerInit() {} // Temporary 'fix' for [OnlinePlayers] and hook 'overloading'
 
         #endregion
 
