@@ -7,18 +7,20 @@ TODO:
 - Fix player becoming visible when switching weapons? (need to verify)
 */
 
-using System.Collections.Generic;
-using System.Linq;
 using Network;
 using Newtonsoft.Json;
+using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Game.Rust.Cui;
 using Rust;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg (maintained by Jake_Rich)", "0.5.3")]
+    [Info("Vanish", "Wulf/lukespragg (maintained by Jake_Rich)", "0.5.4")]
     [Description("Allows players with permission to become truly invisible")]
     public class Vanish : RustPlugin
     {
@@ -32,38 +34,25 @@ namespace Oxide.Plugins
             // TODO: Add config option to customize effect/sound prefab
 
             [JsonProperty(PropertyName = "Image URL for vanish icon (.png or .jpg)")]
-            public string ImageUrlIcon;
+            public string ImageUrlIcon { get; set; } = "http://i.imgur.com/Gr5G3YI.png";
+
+            [JsonProperty(PropertyName = "Performance mode (true/false)")]
+            public bool PerformanceMode { get; set; } = false;
 
             [JsonProperty(PropertyName = "Play sound effect (true/false)")]
-            public bool PlaySoundEffect;
+            public bool PlaySoundEffect { get; set; } = true;
 
             [JsonProperty(PropertyName = "Show visual indicator (true/false)")]
-            public bool ShowGuiIcon;
+            public bool ShowGuiIcon { get; set; } = true;
 
             [JsonProperty(PropertyName = "Vanish timeout (seconds, 0 to disable)")]
-            public int VanishTimeout;
+            public int VanishTimeout { get; set; } = 0;
 
             [JsonProperty(PropertyName = "Visible to admin (true/false)")]
-            public bool VisibleToAdmin;
-
-            [JsonProperty(PropertyName = "Better performance but disables a few features (true/false)")]
-            public bool PerformanceMode;
+            public bool VisibleToAdmin { get; set; } = false;
 
             //[JsonProperty(PropertyName = "Visible to moderators (true/false)")]
-            //public bool VisibleToMods;
-
-            public static Configuration DefaultConfig()
-            {
-                return new Configuration
-                {
-                    ImageUrlIcon = "http://i.imgur.com/Gr5G3YI.png",
-                    PlaySoundEffect = true,
-                    ShowGuiIcon = true,
-                    VanishTimeout = 0,
-                    VisibleToAdmin = false
-                    //VisibleToMods = false
-                };
-            }
+            //public bool VisibleToMods { get; set; } = false;
         }
 
         protected override void LoadConfig()
@@ -72,21 +61,28 @@ namespace Oxide.Plugins
             try
             {
                 config = Config.ReadObject<Configuration>();
-                if (config?.PlaySoundEffect == null) LoadDefaultConfig();
+                if (config == null)
+                {
+                    LoadDefaultConfig();
+                }
             }
             catch
             {
-                PrintWarning($"Could not read oxide/config/{Name}.json, creating new config file");
                 LoadDefaultConfig();
             }
             SaveConfig();
         }
 
-        protected override void LoadDefaultConfig() => config = Configuration.DefaultConfig();
+        protected override void LoadDefaultConfig()
+        {
+            string configPath = $"{Interface.Oxide.ConfigDirectory}{Path.DirectorySeparatorChar}{Name}.json";
+            PrintWarning($"Could not load a valid configuration file, creating a new configuration file at {configPath}");
+            config = new Configuration();
+        }
 
         protected override void SaveConfig() => Config.WriteObject(config);
 
-        #endregion
+        #endregion Configuration
 
         #region Localization
 
@@ -109,7 +105,7 @@ namespace Oxide.Plugins
             }, this);
         }
 
-        #endregion
+        #endregion Localization
 
         #region Initialization
 
@@ -134,7 +130,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permDamagePlayers, this);
             permission.RegisterPermission(permUse, this);
 
-            AddCommandAliases("CommandVanish", "VanishCommand");
+            AddLocalizedCommand("CommandVanish", "VanishCommand");
 
             if (config.ImageUrlIcon == null)
             {
@@ -156,6 +152,7 @@ namespace Oxide.Plugins
                 Subscribe(nameof(CanNetworkTo));
                 Subscribe(nameof(OnPlayerTick));
             }
+
             Subscribe(nameof(CanBeTargeted));
             Subscribe(nameof(CanBradleyApcTarget));
             Subscribe(nameof(OnNpcPlayerTarget));
@@ -178,7 +175,7 @@ namespace Oxide.Plugins
             Unsubscribe(nameof(OnPlayerTick));
         }
 
-        #endregion
+        #endregion Initialization
 
         #region Data Storage
 
@@ -191,13 +188,13 @@ namespace Oxide.Plugins
         [OnlinePlayers]
         private Hash<BasePlayer, OnlinePlayer> onlinePlayers = new Hash<BasePlayer, OnlinePlayer>();
 
-        #endregion
+        #endregion Data Storage
 
         #region Commands
 
         private void VanishCommand(IPlayer player, string command, string[] args)
         {
-            var basePlayer = player.Object as BasePlayer;
+            BasePlayer basePlayer = player.Object as BasePlayer;
             if (basePlayer == null)
             {
                 player.Reply(Lang("PlayersOnly", player.Id, command));
@@ -212,22 +209,34 @@ namespace Oxide.Plugins
 
             // TODO: Add optional command cooldown
 
-            if (config.PlaySoundEffect) Effect.server.Run(defaultEffect, basePlayer.transform.position); // TODO: Check if prefab/effect exists
-            if (IsInvisible(basePlayer)) Reappear(basePlayer);
-            else Disappear(basePlayer);
+            if (config.PlaySoundEffect)
+            {
+                Effect.server.Run(defaultEffect, basePlayer.transform.position); // TODO: Check if prefab/effect exists
+            }
+
+            if (IsInvisible(basePlayer))
+            {
+                Reappear(basePlayer);
+            }
+            else
+            {
+                Disappear(basePlayer);
+            }
         }
 
-        #endregion
+        #endregion Commands
 
         #region Vanishing Act
 
         private void Disappear(BasePlayer basePlayer)
         {
-            var connections = new List<Connection>();
-            foreach (var target in BasePlayer.activePlayerList)
+            List<Connection> connections = new List<Connection>();
+            foreach (BasePlayer target in BasePlayer.activePlayerList)
             {
-                if (basePlayer == target || !target.IsConnected) continue;
-                if (config.VisibleToAdmin && target.IPlayer.IsAdmin) continue;
+                if (basePlayer == target || !target.IsConnected || config.VisibleToAdmin && target.IPlayer.IsAdmin)
+                {
+                    continue;
+                }
 
                 connections.Add(target.net.connection);
             }
@@ -237,7 +246,7 @@ namespace Oxide.Plugins
                 basePlayer.limitNetworking = true;
             }
 
-            var held = basePlayer.GetHeldEntity();
+            HeldEntity held = basePlayer.GetHeldEntity();
             if (held != null)
             {
                 held.SetHeld(false);
@@ -255,16 +264,21 @@ namespace Oxide.Plugins
 
             basePlayer.UpdatePlayerCollider(false);
 
-            if (config.ShowGuiIcon) VanishGui(basePlayer);
+            if (config.ShowGuiIcon)
+            {
+                VanishGui(basePlayer);
+            }
+
             onlinePlayers[basePlayer].IsInvisible = true;
             Message(basePlayer.IPlayer, "VanishEnabled");
 
             if (config.VanishTimeout > 0f) timer.Once(config.VanishTimeout, () =>
             {
-                if (!onlinePlayers[basePlayer].IsInvisible) return;
-
-                Reappear(basePlayer);
-                Message(basePlayer.IPlayer, "VanishTimedOut");
+                if (onlinePlayers[basePlayer].IsInvisible)
+                {
+                    Reappear(basePlayer);
+                    Message(basePlayer.IPlayer, "VanishTimedOut");
+                }
             });
 
             Subscribe();
@@ -273,11 +287,16 @@ namespace Oxide.Plugins
         // Hide from other players
         private object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
         {
-            Puts("CanNetworkTo");
-            var basePlayer = entity as BasePlayer ?? (entity as HeldEntity)?.GetOwnerPlayer();
-            if (basePlayer == null || target == null || basePlayer == target) return null;
-            if (config.VisibleToAdmin && target.IsAdmin) return null;
-            if (IsInvisible(basePlayer)) return false;
+            BasePlayer basePlayer = entity as BasePlayer ?? (entity as HeldEntity)?.GetOwnerPlayer();
+            if (basePlayer == null || target == null || basePlayer == target || config.VisibleToAdmin && target.IsAdmin)
+            {
+                return null;
+            }
+
+            if (IsInvisible(basePlayer))
+            {
+                return false;
+            }
 
             return null;
         }
@@ -285,8 +304,11 @@ namespace Oxide.Plugins
         // Hide from helis/turrets
         private object CanBeTargeted(BaseCombatEntity entity)
         {
-            var basePlayer = entity as BasePlayer;
-            if (basePlayer != null && IsInvisible(basePlayer)) return false;
+            BasePlayer basePlayer = entity as BasePlayer;
+            if (basePlayer != null && IsInvisible(basePlayer))
+            {
+                return false;
+            }
 
             return null;
         }
@@ -294,8 +316,11 @@ namespace Oxide.Plugins
         // Hide from the bradley APC
         private object CanBradleyApcTarget(BradleyAPC apc, BaseEntity entity)
         {
-            var basePlayer = entity as BasePlayer;
-            if (basePlayer != null && IsInvisible(basePlayer)) return false;
+            BasePlayer basePlayer = entity as BasePlayer;
+            if (basePlayer != null && IsInvisible(basePlayer))
+            {
+                return false;
+            }
 
             return null;
         }
@@ -303,7 +328,10 @@ namespace Oxide.Plugins
         // Hide from the patrol helicopter
         private object CanHelicopterTarget(PatrolHelicopterAI heli, BasePlayer basePlayer)
         {
-            if (IsInvisible(basePlayer)) return false;
+            if (IsInvisible(basePlayer))
+            {
+                return false;
+            }
 
             return null;
         }
@@ -311,8 +339,11 @@ namespace Oxide.Plugins
         // Hide from scientist NPCs
         private object OnNpcPlayerTarget(NPCPlayerApex npc, BaseEntity entity)
         {
-            var basePlayer = entity as BasePlayer;
-            if (basePlayer != null && IsInvisible(basePlayer)) return 0f;
+            BasePlayer basePlayer = entity as BasePlayer;
+            if (basePlayer != null && IsInvisible(basePlayer))
+            {
+                return 0f;
+            }
 
             return null;
         }
@@ -320,12 +351,13 @@ namespace Oxide.Plugins
         // Hide from all other NPCs
         private object OnNpcTarget(BaseNpc npc, BaseEntity entity)
         {
-            var basePlayer = entity as BasePlayer;
-            if (basePlayer != null && IsInvisible(basePlayer)) return 0f;
+            BasePlayer basePlayer = entity as BasePlayer;
+            if (basePlayer != null && IsInvisible(basePlayer)) { return 0f; }
 
             return null;
         }
 
+        // Disappear when waking up if vanished
         private void OnPlayerSleepEnded(BasePlayer basePlayer)
         {
             if (IsInvisible(basePlayer)) // TODO: Add persistence permission check
@@ -335,12 +367,14 @@ namespace Oxide.Plugins
             }
         }
 
+        // Prevent sound on player landing
         private object OnPlayerLand(BasePlayer player, float num)
         {
             if (IsInvisible(player))
             {
                 return false;
             }
+
             return null;
         }
 
@@ -348,21 +382,23 @@ namespace Oxide.Plugins
         {
             if (IsInvisible(player))
             {
-                //Allow vanished players to open boxes while vanished without noise
-                if (permission.UserHasPermission(player.UserIDString, permAbilitiesInvulnerable) || player.IsImmortal()) 
+                // Allow vanished players to open boxes while vanished without noise
+                if (permission.UserHasPermission(player.UserIDString, permAbilitiesInvulnerable) || player.IsImmortal())
                 {
                     return true;
                 }
-                //Don't make lock sound if your not authed while vanished
-                else if (baseLock.OnTryToOpen(player) == false) 
+
+                // Don't make lock sound if your not authed while vanished
+                if (!baseLock.OnTryToOpen(player))
                 {
                     return false;
                 }
             }
+
             return null;
         }
 
-        #endregion
+        #endregion Vanishing Act
 
         #region Reappearing Act
 
@@ -370,10 +406,9 @@ namespace Oxide.Plugins
         {
             onlinePlayers[basePlayer].IsInvisible = false;
             basePlayer.SendNetworkUpdate();
-
             basePlayer.limitNetworking = false;
 
-            var held = basePlayer.GetHeldEntity();
+            HeldEntity held = basePlayer.GetHeldEntity();
             if (held != null)
             {
                 held.UpdateVisibility_Hand();
@@ -383,13 +418,19 @@ namespace Oxide.Plugins
             basePlayer.UpdatePlayerCollider(true);
 
             string gui;
-            if (guiInfo.TryGetValue(basePlayer.userID, out gui)) CuiHelper.DestroyUi(basePlayer, gui);
+            if (guiInfo.TryGetValue(basePlayer.userID, out gui))
+            {
+                CuiHelper.DestroyUi(basePlayer, gui);
+            }
 
             Message(basePlayer.IPlayer, "VanishDisabled");
-            if (onlinePlayers.Values.Count(p => p.IsInvisible) <= 0) Unsubscribe(nameof(CanNetworkTo));
+            if (onlinePlayers.Values.Count(p => p.IsInvisible) <= 0)
+            {
+                Unsubscribe(nameof(CanNetworkTo));
+            }
         }
 
-        #endregion
+        #endregion Reappearing Act
 
         #region GUI Indicator
 
@@ -398,9 +439,12 @@ namespace Oxide.Plugins
         private void VanishGui(BasePlayer basePlayer)
         {
             string gui;
-            if (guiInfo.TryGetValue(basePlayer.userID, out gui)) CuiHelper.DestroyUi(basePlayer, gui);
+            if (guiInfo.TryGetValue(basePlayer.userID, out gui))
+            {
+                CuiHelper.DestroyUi(basePlayer, gui);
+            }
 
-            var elements = new CuiElementContainer();
+            CuiElementContainer elements = new CuiElementContainer();
             guiInfo[basePlayer.userID] = CuiHelper.GetGuid();
 
             elements.Add(new CuiElement
@@ -416,16 +460,19 @@ namespace Oxide.Plugins
             CuiHelper.AddUi(basePlayer, elements);
         }
 
-        #endregion
+        #endregion GUI Indicator
 
         #region Damage Blocking
 
         private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            var basePlayer = (info?.Initiator as BasePlayer) ?? entity as BasePlayer;
-            if (basePlayer == null || !basePlayer.IsConnected || !onlinePlayers[basePlayer].IsInvisible) return null;
+            BasePlayer basePlayer = (info?.Initiator as BasePlayer) ?? entity as BasePlayer;
+            if (basePlayer == null || !basePlayer.IsConnected || !onlinePlayers[basePlayer].IsInvisible)
+            {
+                return null;
+            }
 
-            var player = basePlayer.IPlayer;
+            IPlayer player = basePlayer.IPlayer;
 
             // Block damage to animals
             if (entity is BaseNpc)
@@ -439,7 +486,10 @@ namespace Oxide.Plugins
             // Block damage to buildings
             if (!(entity is BasePlayer))
             {
-                if (player.HasPermission(permDamageBuildings)) return null;
+                if (player.HasPermission(permDamageBuildings))
+                {
+                    return null;
+                }
 
                 Message(player, "CantDamageBuilds");
                 return true;
@@ -448,13 +498,16 @@ namespace Oxide.Plugins
             // Block damage to players
             if (info?.Initiator is BasePlayer)
             {
-                if (player.HasPermission(permDamagePlayers)) return null;
+                if (player.HasPermission(permDamagePlayers))
+                {
+                    return null;
+                }
 
                 Message(player, "CantHurtPlayers");
                 return true;
             }
 
-            if (basePlayer == info.HitEntity)
+            if (basePlayer == info?.HitEntity)
             {
                 // Block damage to self
                 if (player.HasPermission(permAbilitiesInvulnerable))
@@ -469,40 +522,39 @@ namespace Oxide.Plugins
             return null;
         }
 
-        #endregion
+        #endregion Damage Blocking
 
         #region Weapon Blocking
 
         private void OnPlayerTick(BasePlayer basePlayer)
         {
-            if (!onlinePlayers[basePlayer].IsInvisible) return;
-
-            var held = basePlayer.GetHeldEntity();
-            if (held != null && basePlayer.IPlayer.HasPermission(permAbilitiesWeapons)) held.SetHeld(false);
+            if (onlinePlayers[basePlayer].IsInvisible)
+            {
+                HeldEntity held = basePlayer.GetHeldEntity();
+                if (held != null && basePlayer.IPlayer.HasPermission(permAbilitiesWeapons))
+                {
+                    held.SetHeld(false);
+                }
+            }
         }
 
-        #endregion
+        #endregion Weapon Blocking
 
         #region Teleport Blocking
 
         private object CanTeleport(BasePlayer basePlayer)
         {
-            if (onlinePlayers[basePlayer] == null)
+            // Ignore for normal teleport plugins
+            if (onlinePlayers[basePlayer] == null || !onlinePlayers[basePlayer].IsInvisible)
             {
                 return null;
             }
 
-            //Ignore for normal teleport plugins
-            if (!onlinePlayers[basePlayer].IsInvisible)
-            {
-                return null;
-            }
-
-            var canTeleport = basePlayer.IPlayer.HasPermission(permAbilitiesTeleport);
+            bool canTeleport = basePlayer.IPlayer.HasPermission(permAbilitiesTeleport);
             return !canTeleport ? Lang("CantUseTeleport", basePlayer.UserIDString) : null;
         }
 
-        #endregion
+        #endregion Teleport Blocking
 
         #region Persistence Handling
 
@@ -511,38 +563,47 @@ namespace Oxide.Plugins
             // TODO: Persistence permission check and handling
         }
 
-        #endregion
+        #endregion Persistence Handling
 
         #region Cleanup
 
         private void Unload()
         {
-            foreach (var basePlayer in BasePlayer.activePlayerList)
+            foreach (BasePlayer basePlayer in BasePlayer.activePlayerList)
             {
                 string gui;
-                if (guiInfo.TryGetValue(basePlayer.userID, out gui)) CuiHelper.DestroyUi(basePlayer, gui);
+                if (guiInfo.TryGetValue(basePlayer.userID, out gui))
+                {
+                    CuiHelper.DestroyUi(basePlayer, gui);
+                }
             }
         }
 
-        #endregion
+        #endregion Cleanup
 
         #region Helpers
 
-        private void AddCommandAliases(string key, string command)
+        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+
+        private void AddLocalizedCommand(string key, string command)
         {
-            foreach (var language in lang.GetLanguages(this))
+            foreach (string language in lang.GetLanguages(this))
             {
-                var messages = lang.GetMessages(language, this);
-                foreach (var message in messages.Where(m => m.Key.Equals(key))) AddCovalenceCommand(message.Value, command);
+                Dictionary<string, string> messages = lang.GetMessages(language, this);
+                foreach (KeyValuePair<string, string> message in messages.Where(m => m.Key.Equals(key)))
+                {
+                    if (!string.IsNullOrEmpty(message.Value))
+                    {
+                        AddCovalenceCommand(message.Value, command);
+                    }
+                }
             }
         }
-
-        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
 
         private void Message(IPlayer player, string key, params object[] args) => player.Reply(Lang(key, player.Id, args));
 
         private bool IsInvisible(BasePlayer player) => onlinePlayers[player]?.IsInvisible ?? false;
 
-        #endregion
+        #endregion Helpers
     }
 }
