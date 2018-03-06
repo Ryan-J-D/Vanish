@@ -18,7 +18,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg (maintained by Jake_Rich)", "0.5.1")]
+    [Info("Vanish", "Wulf/lukespragg (maintained by Jake_Rich)", "0.5.3")]
     [Description("Allows players with permission to become truly invisible")]
     public class Vanish : RustPlugin
     {
@@ -45,6 +45,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Visible to admin (true/false)")]
             public bool VisibleToAdmin;
+
+            [JsonProperty(PropertyName = "Better performance but disables a few features (true/false)")]
+            public bool PerformanceMode;
 
             //[JsonProperty(PropertyName = "Visible to moderators (true/false)")]
             //public bool VisibleToMods;
@@ -143,7 +146,16 @@ namespace Oxide.Plugins
 
         private void Subscribe()
         {
-            Subscribe(nameof(CanNetworkTo));
+            if (config.PerformanceMode)
+            {
+                Unsubscribe(nameof(CanNetworkTo));
+                Unsubscribe(nameof(OnPlayerTick));
+            }
+            else
+            {
+                Subscribe(nameof(CanNetworkTo));
+                Subscribe(nameof(OnPlayerTick));
+            }
             Subscribe(nameof(CanBeTargeted));
             Subscribe(nameof(CanBradleyApcTarget));
             Subscribe(nameof(OnNpcPlayerTarget));
@@ -163,6 +175,7 @@ namespace Oxide.Plugins
             Unsubscribe(nameof(OnEntityTakeDamage));
             Unsubscribe(nameof(OnPlayerSleepEnded));
             Unsubscribe(nameof(OnPlayerLand));
+            Unsubscribe(nameof(OnPlayerTick));
         }
 
         #endregion
@@ -219,6 +232,11 @@ namespace Oxide.Plugins
                 connections.Add(target.net.connection);
             }
 
+            if (config.PerformanceMode)
+            {
+                basePlayer.limitNetworking = true;
+            }
+
             var held = basePlayer.GetHeldEntity();
             if (held != null)
             {
@@ -250,20 +268,15 @@ namespace Oxide.Plugins
             });
 
             Subscribe();
-
-            //Remove player from Grid so animals can't target it (HACKY SOLUTION)
-            //Is good for now, as the only thing that uses this grid is AI, so removing it only prevents AI from finding player
-            //Player is added back to grid when reappearing
-            BaseEntity.Query.Server.RemovePlayer(basePlayer);
-            Puts("Removed Player From Animal Grid");
         }
 
         // Hide from other players
         private object CanNetworkTo(BaseNetworkable entity, BasePlayer target)
         {
+            Puts("CanNetworkTo");
             var basePlayer = entity as BasePlayer ?? (entity as HeldEntity)?.GetOwnerPlayer();
             if (basePlayer == null || target == null || basePlayer == target) return null;
-            if (config.VisibleToAdmin && target.IPlayer.IsAdmin) return null;
+            if (config.VisibleToAdmin && target.IsAdmin) return null;
             if (IsInvisible(basePlayer)) return false;
 
             return null;
@@ -335,9 +348,15 @@ namespace Oxide.Plugins
         {
             if (IsInvisible(player))
             {
-                if (permission.UserHasPermission(player.UserIDString, permAbilitiesInvulnerable) || player.IsImmortal())
+                //Allow vanished players to open boxes while vanished without noise
+                if (permission.UserHasPermission(player.UserIDString, permAbilitiesInvulnerable) || player.IsImmortal()) 
                 {
                     return true;
+                }
+                //Don't make lock sound if your not authed while vanished
+                else if (baseLock.OnTryToOpen(player) == false) 
+                {
+                    return false;
                 }
             }
             return null;
@@ -352,6 +371,8 @@ namespace Oxide.Plugins
             onlinePlayers[basePlayer].IsInvisible = false;
             basePlayer.SendNetworkUpdate();
 
+            basePlayer.limitNetworking = false;
+
             var held = basePlayer.GetHeldEntity();
             if (held != null)
             {
@@ -363,9 +384,6 @@ namespace Oxide.Plugins
 
             string gui;
             if (guiInfo.TryGetValue(basePlayer.userID, out gui)) CuiHelper.DestroyUi(basePlayer, gui);
-            Puts("Added Player From Animal Grid");
-            //Add player back to Grid so AI can find it
-            BaseEntity.Query.Server.AddPlayer(basePlayer);
 
             Message(basePlayer.IPlayer, "VanishDisabled");
             if (onlinePlayers.Values.Count(p => p.IsInvisible) <= 0) Unsubscribe(nameof(CanNetworkTo));
