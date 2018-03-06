@@ -2,6 +2,8 @@
 
 **Note:** While vanished, you can hear players but they will be unable to hear you. You are invisible to them and essentially do not exist to them. Even if they walk right through you they *DO NOT* know of your existence.
 
+**NEW** Performance mode added! Enable it in the config file for much better performance. **NOTE** Admins will not be able to see eachother while this mode is active.
+
 ## Permissions
 
 - **vanish.use** -- Required to go invisible
