@@ -388,10 +388,14 @@ namespace Oxide.Plugins
                     return true;
                 }
 
-                // Don't make lock sound if your not authed while vanished
-                if (!baseLock.OnTryToOpen(player))
+                CodeLock codeLock = baseLock as CodeLock;
+                //Don't make lock sound if your not authed while vanished
+                if (codeLock != null)
                 {
-                    return false;
+                    if (!codeLock.whitelistPlayers.Contains(player.userID) && !codeLock.guestPlayers.Contains(player.userID))
+                    {
+                        return false;
+                    }
                 }
             }
 
