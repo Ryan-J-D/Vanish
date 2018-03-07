@@ -246,12 +246,12 @@ namespace Oxide.Plugins
                 basePlayer.limitNetworking = true;
             }
 
-            HeldEntity held = basePlayer.GetHeldEntity();
-            if (held != null)
+            HeldEntity heldEntity = basePlayer.GetHeldEntity();
+            if (heldEntity != null)
             {
-                held.SetHeld(false);
-                held.UpdateVisiblity_Invis();
-                held.SendNetworkUpdate();
+                heldEntity.SetHeld(false);
+                heldEntity.UpdateVisiblity_Invis();
+                heldEntity.SendNetworkUpdate();
             }
 
             if (Net.sv.write.Start())
@@ -342,7 +342,7 @@ namespace Oxide.Plugins
             BasePlayer basePlayer = entity as BasePlayer;
             if (basePlayer != null && IsInvisible(basePlayer))
             {
-                return 0f;
+                return false;
             }
 
             return null;
@@ -352,7 +352,10 @@ namespace Oxide.Plugins
         private object OnNpcTarget(BaseNpc npc, BaseEntity entity)
         {
             BasePlayer basePlayer = entity as BasePlayer;
-            if (basePlayer != null && IsInvisible(basePlayer)) { return 0f; }
+            if (basePlayer != null && IsInvisible(basePlayer))
+            {
+                return false;
+            }
 
             return null;
         }
@@ -412,11 +415,11 @@ namespace Oxide.Plugins
             basePlayer.SendNetworkUpdate();
             basePlayer.limitNetworking = false;
 
-            HeldEntity held = basePlayer.GetHeldEntity();
-            if (held != null)
+            HeldEntity heldEnity = basePlayer.GetHeldEntity();
+            if (heldEnity != null)
             {
-                held.UpdateVisibility_Hand();
-                held.SendNetworkUpdate();
+                heldEnity.UpdateVisibility_Hand();
+                heldEnity.SendNetworkUpdate();
             }
 
             basePlayer.UpdatePlayerCollider(true);
@@ -456,8 +459,16 @@ namespace Oxide.Plugins
                 Name = guiInfo[basePlayer.userID],
                 Components =
                 {
-                    new CuiRawImageComponent { Color = "1 1 1 0.3", Url = config.ImageUrlIcon }, // TODO: Add position config options
-                    new CuiRectTransformComponent { AnchorMin = "0.175 0.017",  AnchorMax = "0.22 0.08" } // TODO: Add position config options
+                    new CuiRawImageComponent
+                    {
+                        Color = "1 1 1 0.3", // TODO: Add position config options
+                        Url = config.ImageUrlIcon
+                    },
+                    new CuiRectTransformComponent
+                    {
+                        AnchorMin = "0.175 0.017", // TODO: Add position config options
+                        AnchorMax = "0.22 0.08"
+                    }
                 }
             });
 
@@ -470,7 +481,7 @@ namespace Oxide.Plugins
 
         private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo info)
         {
-            BasePlayer basePlayer = (info?.Initiator as BasePlayer) ?? entity as BasePlayer;
+            BasePlayer basePlayer = info?.Initiator as BasePlayer ?? entity as BasePlayer;
             if (basePlayer == null || !basePlayer.IsConnected || !onlinePlayers[basePlayer].IsInvisible)
             {
                 return null;
@@ -481,7 +492,10 @@ namespace Oxide.Plugins
             // Block damage to animals
             if (entity is BaseNpc)
             {
-                if (player.HasPermission(permDamageAnimals)) return null;
+                if (player.HasPermission(permDamageAnimals))
+                {
+                    return null;
+                }
 
                 Message(player, "CantHurtAnimals");
                 return true;
@@ -511,9 +525,9 @@ namespace Oxide.Plugins
                 return true;
             }
 
+            // Block damage to self
             if (basePlayer == info?.HitEntity)
             {
-                // Block damage to self
                 if (player.HasPermission(permAbilitiesInvulnerable))
                 {
                     info.damageTypes = new DamageTypeList();
@@ -534,10 +548,10 @@ namespace Oxide.Plugins
         {
             if (onlinePlayers[basePlayer].IsInvisible)
             {
-                HeldEntity held = basePlayer.GetHeldEntity();
-                if (held != null && basePlayer.IPlayer.HasPermission(permAbilitiesWeapons))
+                HeldEntity heldEntity = basePlayer.GetHeldEntity();
+                if (heldEntity != null && basePlayer.IPlayer.HasPermission(permAbilitiesWeapons))
                 {
-                    held.SetHeld(false);
+                    heldEntity.SetHeld(false);
                 }
             }
         }
