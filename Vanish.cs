@@ -20,7 +20,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg (maintained by Jake_Rich)", "0.5.4")]
+    [Info("Vanish", "Wulf/lukespragg (maintained by Jake_Rich)", "0.5.5")]
     [Description("Allows players with permission to become truly invisible")]
     public class Vanish : RustPlugin
     {
