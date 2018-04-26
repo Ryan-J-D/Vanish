@@ -6,16 +6,18 @@
 
 ## Permissions
 
-- **vanish.use** -- Required to go invisible
-- **vanish.damage.buildings** -- Allows player to damage buildings
-- **vanish.damage.animals** -- Allows player to hurt animals while vanished
-- **vanish.damage.players** -- Allows player to hurt players while vanished
-- **vanish.abilities.invulnerable** -- Makes player invulnerable while vanished
-- **vanish.abilities.teleport** -- Allows player to teleport while vanished
+- `vanish.use` -- Required to go invisible
+- `vanish.damage.buildings` -- Allows player to damage buildings
+- `vanish.damage.animals` -- Allows player to hurt animals while vanished
+- `vanish.damage.players` -- Allows player to hurt players while vanished
+- `vanish.abilities.invulnerable` -- Makes player invulnerable while vanished
+- `vanish.abilities.teleport` -- Allows player to teleport while vanished
 
 ## Commands
 
-- **vanish** -- Toggle player's invisibility on/off
+This plugin provides universal chat and console commands. When using a command in the chat, prefix it with a forward slash: `/`.
+
+- `vanish` -- Toggle invisibility on/off for self
 
 ## Configuration
 
