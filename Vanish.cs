@@ -20,7 +20,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Vanish", "Wulf/lukespragg", "0.5.7")]
+    [Info("Vanish", "Wulf/lukespragg", "0.5.8")]
     [Description("Allows players with permission to become truly invisible")]
     public class Vanish : RustPlugin
     {
@@ -375,6 +375,28 @@ namespace Oxide.Plugins
 
         // Prevent sound on player landing
         private object OnPlayerLand(BasePlayer player, float num)
+        {
+            if (IsInvisible(player))
+            {
+                return true; // Cancel, not a bool hook
+            }
+
+            return null;
+        }
+
+        // Prevent hostility
+        private object CanEntityBeHostile(BasePlayer player)
+        {
+            if (IsInvisible(player))
+            {
+                return true; // Cancel, not a bool hook
+            }
+
+            return null;
+        }
+
+        // Cancel hostility
+        private object OnEntityMarkHostile(BasePlayer player)
         {
             if (IsInvisible(player))
             {
